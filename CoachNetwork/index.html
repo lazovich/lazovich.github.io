@@ -1,0 +1,242 @@
+<!-- Based on Mike Bostock's examples http://bl.ocks.org/mbostock/4339083 and http://bl.ocks.org/mbostock/4062045  -->
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>NFL Coaching Tree Visualization</title>
+        <script type="text/javascript" src="d3/d3.js"></script>
+<style>
+
+
+
+.node {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+.node:hover {
+  stroke: red;
+  stroke-width: 1.5px;
+}
+
+.link {
+  stroke: #999;
+  stroke-opacity: .6;
+}
+
+.d3-tip {
+  line-height: 1;
+  font-weight: bold;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 2px;
+}
+
+h1{
+  font-family: Arial;
+
+}
+
+select{
+  vertical-align: top;
+}
+  
+
+
+</style>
+    </head>
+    <body>
+        <h1> NFL Coaching Tree Visualization </h1>
+        <div/>
+        <script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
+        <script>
+
+        var width = 600,
+        height = 600;
+
+        var color = d3.scale.category20();
+
+        var force = d3.layout.force()
+            .charge(function(d) { return Math.max(-50, -d.out_degree*10)})
+            .linkDistance(200)
+            .size([width, height]);
+
+        var tree = d3.layout.tree().size([height, width]);
+
+        var tip = d3.tip()
+                    .attr('class', 'd3-tip')
+                    .offset([75, 0])
+                    .html(function(d) {
+                             return "<span>" + d.coach_name + "</span>";
+                          })
+
+        var svg = d3.select("body").select("div").append("svg")
+            .attr("width", width)
+            .attr("height", height).attr("align", "center");
+
+
+
+        svg.call(tip)
+        var defs = svg.append('svg:defs');
+            defs.append('svg:marker')
+              .attr('id', 'end-arrow')
+              .attr('viewBox', '0 -5 10 10')
+              .attr('refX', "22")
+              .attr('markerWidth', 3.5)
+              .attr('markerHeight', 3.5)
+              .attr('orient', 'auto')
+              .append('svg:path')
+              .attr('d', 'M0,-5L10,0L0,5');
+
+        var full_graph; 
+        var full_nodes; 
+        var desc_trees = {};
+        var select = d3.select("body")
+                        .select("div")
+                        .append("select");
+
+        d3.json("data/coach_graph_no_orphans.json", function(error, graph) {
+          full_graph = graph;
+          full_nodes = full_graph.nodes;
+          for(var i=0; i<full_nodes.length; i++){
+            if(i==0){
+              console.log(full_nodes[i]);
+            }
+            var obj = full_nodes[i];
+            desc_trees[obj['id']] = JSON.parse(obj['tree_descendants']);
+          }
+
+
+          select.on("change", function() { update(desc_trees[this.value], this.value)});
+
+          select.selectAll("option")
+                .data(full_nodes)
+                .enter().append("option")
+                .attr("value", function(d) { return d.id; })
+                .text(function(d) { return d.coach_name; });
+          
+          update(graph, -1);
+        });
+
+//        console.log(full_graph);
+
+        function update(graph, node_id){
+            svg.selectAll(".circle").remove();
+            svg.selectAll(".line").remove();
+            svg.selectAll("link").remove();
+            svg.selectAll(".node").remove();
+            svg.selectAll("rect").remove();
+            svg.selectAll("text").remove();
+
+
+            var node_list, link_list;
+            //link_list = full_graph.links.slice();
+            if(node_id == -1){
+              node_list = graph.nodes;
+              link_list = graph.links;
+            }else{
+              node_list = tree.nodes(graph).reverse();
+              link_list = tree.links(node_list);
+              graph.y = 2*graph.out_degree;
+              graph.x = width/2;
+              //select.property("value", node_id);
+            }
+
+            /*var node_ids = {};
+            for(var i=0; i<node_list.length; i++){
+              node_ids[node_list[i]['id']] = true;
+            }*/
+
+            console.log(node_list)
+            console.log(node_id);
+            var rect = svg.selectAll(".rect").data([{text:"Return to full graph"}]);
+            var text = svg.selectAll(".text").data([{text:"Return to full graph"}]);
+            if(node_id != -1){
+
+              rect.enter().append("rect").attr("x", 0).attr("y",0).attr("width", 155).attr("height", 30).attr("title", function(d){return d.text}).style("fill", function(d) { return color(d.group); }).on("click", function(d){update(full_graph, -1); select.property("value", full_nodes[0].id); select.property("text", full_nodes[0].coach_name);});
+
+              text.enter().append("text").attr("x", 10).attr("y", 20).style("fill", "white").style("font-family", "Arial").text(function(d){return d.text}).on("click", function(d){update(full_graph, -1);select.property("value", full_nodes[0].id); select.property("text", full_nodes[0].coach_name);});
+              //link_list = link_list.filter(function(l){ return (node_ids[l.source.id] || node_ids[l.target.id]) });
+              console.log(link_list)
+              /*node_list = node_list.filter(function(n){ 
+                                            for (var i = 0; i < link_list.length; i++){
+                                                if(n.id == node_id || n.id == link_list[i].target.id){
+                                                  if(n.id == node_id){
+                                                    console.log(n.out_degree);
+                                                  }
+                                                  return true;
+                                                }
+                                            }
+
+                                            return false;
+                                            });
+              console.log(node_list);*/
+
+            }
+
+            var link = svg.selectAll(".link")
+                         .data(link_list);
+            link.enter().append("line")
+                        .attr("class", "link")
+                        .style("marker-end","url(#end-arrow)");
+
+            link.attr("x1", function(d) { return d.source.x; })
+                  .attr("y1", function(d) { return d.source.y; })
+                  .attr("x2", function(d) { return d.target.x; })
+                  .attr("y2", function(d) { return d.target.y; });
+
+            var node = svg.selectAll(".node")
+              .data(node_list);
+
+            var node_enter = node.enter().append("circle")
+              .attr("class", "node")
+              .attr("r", function(d){ console.log(d.out_degree); return Math.max(3, d.out_degree);})
+              .style("fill", function(d) { return color(d.group); })
+              .on("mouseover", function(d){tip.show(d)})
+              .on("mouseout", function(d){tip.hide(d)})
+              .on("click", function(d){ if(d.out_degree != 0){
+                                            select.property("value", d.id);
+                                            select.property("text", d.coach_name);
+                                            update(desc_trees[d.id], d.id);
+                                         }});
+
+            if (node_id != -1){
+              node_enter.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+            }
+
+
+
+          node.exit().remove();
+          link.exit().remove();
+          rect.exit().remove();
+          text.exit().remove();
+
+        //      .call(force.drag);
+
+          node.append("title")
+              .text(function(d) { return d.name; });
+
+          if(node_id == -1){
+
+            force.on("tick", function() {
+              link.attr("x1", function(d) { return d.source.x; })
+                  .attr("y1", function(d) { return d.source.y; })
+                  .attr("x2", function(d) { return d.target.x; })
+                  .attr("y2", function(d) { return d.target.y; });
+
+              node.attr("cx", function(d) { return d.x; })
+                  .attr("cy", function(d) { return d.y; });
+            });
+
+            force
+                .nodes(node_list)
+                .links(link_list)
+                .start();
+          }
+        }
+
+        </script>
+    </body>
+</html> 
